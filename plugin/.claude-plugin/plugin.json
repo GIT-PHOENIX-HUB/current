@@ -1,0 +1,10 @@
+{
+  "name": "servicefusion",
+  "description": "Service Fusion v1 API integration for Phoenix Electric — CRM, jobs, estimates, invoices, technicians, calendar. 23 active API tools with operational skills, slash commands, and autonomous agent.",
+  "version": "2.0.0",
+  "author": {
+    "name": "Shane Warehime",
+    "email": "shane@phoenixelectric.life"
+  },
+  "keywords": ["servicefusion", "phoenix-electric", "crm", "field-service", "electrical"]
+}
