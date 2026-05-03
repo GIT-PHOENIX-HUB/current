@@ -1,74 +1,80 @@
 # Phoenix Current Software (PCS)
 
-Service Fusion replacement — built by Phoenix Electric LLC.
+Service Fusion v1 API integration for Phoenix Electric LLC — an **electrical** company.
 
 **"Current"** = electrical current + up to date.
 
 ## Repository Structure
 
 ```
-current/
+phoenix-current-software/
+├── package.json                 npm workspaces root
 ├── packages/
-│   ├── mcp-server/           MCP server — 23 active SF API tools
-│   │   ├── src/              TypeScript source (client, cache, rate-limiter, tools)
-│   │   └── scripts/          API discovery/validation scripts
-│   └── shared/               Shared utilities
-│       └── src/              Key Vault integration, logger, type definitions
-├── plugin/                   Claude Code plugin
-│   ├── commands/             6 slash commands (/sf-briefing, /sf-jobs, etc.)
-│   ├── agents/               sf-operations-agent (autonomous SF ops)
-│   └── skills/               Operational skill + 6 reference docs
-├── docs/                     Architecture and rewrite specifications
-└── references/               Raw API specs (RAML, web scrape, processed reference)
+│   ├── mcp-server/              @phoenix/servicefusion-mcp — 23 active SF API tools
+│   │   └── src/                 client, cache, rate-limiter, tools
+│   └── shared/                  @phoenix/shared — Key Vault, logger, types
+├── plugin/                      Claude Code plugin (servicefusion v2.0.0)
+│   ├── .claude-plugin/          plugin.json manifest
+│   ├── .mcp.json                MCP wiring (uses ${PHOENIX_PCS_ROOT})
+│   ├── commands/                4 slash commands (sf-briefing, sf-jobs, sf-estimate, sf-schedule)
+│   ├── agents/                  sf-operations-agent
+│   └── skills/                  servicefusion-operations skill
+├── docs/                        api-surface.md, decisions/
+├── RUNBOOK.md                   How to run, secrets, recovery
+└── CHANGELOG.md                 Versioned change log
 ```
 
 ## Service Fusion API
 
 - **Base URL:** `https://api.servicefusion.com/v1/`
-- **Auth:** OAuth 2.0 Client Credentials Grant
-- **Token endpoint:** `POST https://api.servicefusion.com/oauth/access_token`
-- **Operations:** GET + POST only. NO PUT, PATCH, or DELETE.
-- **Rate limit:** 120 req/min
-- **Credentials:** Azure Key Vault (`phoenixaaivault`)
+- **Auth:** OAuth 2.0 Client Credentials Grant (`POST https://api.servicefusion.com/oauth/access_token`)
+- **Operations:** GET + POST only — no PUT, PATCH, or DELETE
+- **Rate limit:** 60 req/min (initial); response headers override at runtime
+- **Credentials:** Azure Key Vault `phoenixaaivault` — secrets `SERVICEFUSION-CLIENT-ID` and `SERVICEFUSION-SECRET`
 
-## MCP Server (23 Active Tools)
+## MCP Server (23 active tools, 34 deprecated stubs)
 
-| Category | Tools | Methods |
-|----------|-------|---------|
-| CRM | list_customers, get_customer, get_customer_equipment, create_customer, search_customers | GET, POST |
-| Jobs | list_jobs, get_job, create_job, list_job_statuses, list_job_categories | GET, POST |
-| Estimates | list_estimates, get_estimate, create_estimate | GET, POST |
-| Invoices | list_invoices, get_invoice | GET (read-only) |
-| Technicians | list_technicians, get_technician | GET |
-| Calendar | list_calendar_tasks, create_calendar_task | GET, POST |
-| Lookups | list_payment_types, list_sources | GET |
-| Meta | me, health | GET |
+All tools prefixed `servicefusion_*`.
 
-## Plugin (6 Commands + 1 Agent)
+| Category | Active Tools |
+|----------|--------------|
+| CRM | list_customers, get_customer, get_customer_equipment, create_customer, search_customers |
+| Jobs | list_jobs, get_job, create_job, list_job_statuses, list_job_categories |
+| Estimates | list_estimates, get_estimate, create_estimate |
+| Invoices | list_invoices, get_invoice |
+| Technicians | list_technicians, get_technician |
+| Calendar | list_calendar_tasks, create_calendar_task |
+| Lookups | list_payment_types, list_sources |
+| Meta | me, health |
 
-| Command | Purpose |
-|---------|---------|
+34 additional tools exist as deprecated stubs (endpoints returned 404 during 2026-03-10 API discovery). Calling one returns an error directing the user to the SF web UI. See [docs/decisions/2026-05-02-drop-deprecated-stubs.md](docs/decisions/2026-05-02-drop-deprecated-stubs.md) for the proposal to drop them.
+
+## Plugin
+
+| Slash command | Purpose |
+|---------------|---------|
 | `/sf-briefing` | Morning operations summary |
 | `/sf-jobs` | Job listing, creation, status lookup |
-| `/sf-customers` | Customer search, view, create |
-| `/sf-estimate` | Guided estimate/proposal creation |
+| `/sf-estimate` | Guided estimate creation |
 | `/sf-schedule` | Calendar tasks, technician availability |
-| `/sf-pricebook` | Pricebook reference and Rexel pricing |
 
-**Agent:** `sf-operations-agent` — Autonomous orchestrator for multi-step SF operations.
+**Agent:** `sf-operations-agent` — autonomous orchestrator for multi-step SF operations.
 
-## Key Documents
+## Build & Run
 
-| File | Description |
-|------|-------------|
-| `docs/SERVICEFUSION_MCP_REWRITE_BRIEF.md` | MCP rewrite spec — correct endpoints, auth, what to build (compiled 2026-03-05) |
-| `docs/api-surface.md` | Authoritative SF v1 API surface reference |
-| `references/servicefusion-api-complete-spec.md` | 17,929-line processed API reference (75 types, 26 endpoints) |
-| `references/servicefusion-api-spec.json` | Raw 4.3MB RAML specification |
+```bash
+npm install
+npm run build
+npm test
+```
+
+See [RUNBOOK.md](RUNBOOK.md) for vault setup, write enablement, and recovery procedures.
 
 ## Status
 
-Repository initialized 2026-03-17. All Service Fusion documentation, MCP server source, shared utilities, and Claude Code plugin consolidated from `phoenix-ai-core-staging` and `service-fusion` repos.
+- Repository initialized 2026-03-17
+- Phase A stabilization landed 2026-05-02 — archive sweep, build orchestration, strict TS, CI, structured approval logging
+- Active branch: `main`
 
 ---
 *Phoenix Electric LLC — Denver Metro / Douglas County, CO*

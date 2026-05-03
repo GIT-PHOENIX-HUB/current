@@ -14,7 +14,7 @@ OAuth 2.0 client_credentials via `POST https://api.servicefusion.com/oauth/acces
 { "grant_type": "client_credentials", "client_id": "...", "client_secret": "..." }
 ```
 
-Credentials sourced from Azure Key Vault (`PhoenixaAiVault`). Requires `az login` on the machine. The MCP server pulls:
+Credentials sourced from Azure Key Vault (`phoenixaaivault`). Requires `az login` on the machine. The MCP server pulls (canonical names; legacy fallbacks logged as warnings):
 - `SERVICEFUSION-CLIENT-ID` → `client_id`
 - `SERVICEFUSION-SECRET` → `client_secret`
 
@@ -25,7 +25,7 @@ Token is cached with 60-second expiry buffer. Refresh tokens supported (`grant_t
 ## API Basics
 
 - **Base URL:** `https://api.servicefusion.com/v1/{resource}`
-- **Rate limit:** 60 requests/minute per token (429 on exceed, single retry)
+- **Rate limit:** 60 requests/minute initial; response `X-Rate-Limit-*` headers override at runtime. 429 triggers single retry honoring `Retry-After`.
 - **Pagination:** `?page=N&per-page=N` (1-50, default 10)
 - **Sorting:** `?sort=-name,description` (prefix `-` for descending)
 - **Filtering:** `?filters[field]=value`
@@ -100,11 +100,7 @@ These endpoints were confirmed unavailable during API discovery (2026-03-10). Ca
 
 ### Reference Files
 - **`references/api-reference.md`** — All 23 active tools with input schemas
-- **`references/workflows.md`** — Detailed step-by-step operational workflows
-- **`references/financials.md`** — Invoice lifecycle, payment tracking, estimate pipeline
-- **`references/rexel-integration.md`** — Rexel vendor pricing (browser-only currently)
-- **`references/browser-fallback.md`** — Chrome automation for API-limited operations
-- **`references/future-gateway.md`** — Architecture for Studio/Gateway features
+- **`references/browser-fallback.md`** — Chrome automation for API-limited operations (dispatch, pricebook, telecom, memberships, marketing, settings)
 
 ## Important Notes
 
@@ -112,5 +108,5 @@ These endpoints were confirmed unavailable during API discovery (2026-03-10). Ca
 - SF v1 API uses flat paths: `/v1/customers`, `/v1/jobs` — NO tenant ID in URL
 - Auth: `api.servicefusion.com/oauth/access_token` (NOT auth.servicefusion.com)
 - Token format: `Authorization: Bearer {token}` header
-- Rate limit: 60 req/min with single 429 retry
+- Rate limit: 60 req/min initial; response headers override. Single 429 retry honoring `Retry-After`.
 - Many operations available in the SF web UI are NOT available via API (dispatch, pricebook, telecom, memberships, marketing, settings). Use `references/browser-fallback.md` for those.

@@ -3,7 +3,7 @@
     "command": "node",
     "args": [
       "--experimental-specifier-resolution=node",
-      "/Users/shanewarehime/Documents/GIT-PHOENIX-HUB/phoenix-current-software/packages/mcp-server/dist/index.js"
+      "${PHOENIX_PCS_ROOT}/packages/mcp-server/dist/index.js"
     ],
     "env": {
       "AZURE_KEY_VAULT_URI": "https://phoenixaaivault.vault.azure.net/"

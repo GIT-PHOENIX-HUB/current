@@ -1,7 +1,7 @@
 {
   "name": "@phoenix/servicefusion-mcp",
   "version": "2.0.0",
-  "description": "Service Fusion MCP Server — 21 active tools for SF v1 API",
+  "description": "Service Fusion MCP Server — 23 active tools for SF v1 API",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@phoenix/shared": "workspace:*",
+    "@phoenix/shared": "*",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "express": "^4.18.2",
     "zod": "^3.22.0",

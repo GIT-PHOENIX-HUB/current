@@ -1,5 +1,5 @@
 # Product Bible — Phoenix Current Software (PCS)
-**Owner:** GIT-PHOENIX-HUB | **Last Updated:** 2026-03-27
+**Owner:** GIT-PHOENIX-HUB | **Last Updated:** 2026-05-02
 
 ## Purpose
 
@@ -9,8 +9,8 @@ Phoenix Current Software (PCS) is the Service Fusion integration stack for Phoen
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Runtime | Node.js (ESM) | 20+ (tested on 25 with ESM flag) |
-| Language | TypeScript | ^5.3.0 |
+| Runtime | Node.js (ESM) | 20+ |
+| Language | TypeScript | ^5.3.0 (strict mode) |
 | MCP SDK | @modelcontextprotocol/sdk | ^1.25.1 |
 | Schema validation | Zod + zod-to-json-schema | ^3.22.0 / ^3.22.0 |
 | HTTP framework | Express (HTTP transport mode) | ^4.18.2 |
@@ -18,7 +18,7 @@ Phoenix Current Software (PCS) is the Service Fusion integration stack for Phoen
 | Build | TypeScript compiler (tsc) | ^5.3.0 |
 | Dev runner | tsx watch | ^4.7.0 |
 | Test | Vitest | ^1.0.0 |
-| CI/CD | None configured yet | — |
+| CI/CD | GitHub Actions — typecheck, build, test on PR to main | — |
 | Deploy Target | MacBook (stdio, Claude Code plugin) / Gateway (HTTP) | — |
 | Workspace | npm workspaces (monorepo) | — |
 
@@ -34,11 +34,9 @@ current/
 │   │   │   ├── index.ts          Server factory — stdio + HTTP transport, tool dispatch
 │   │   │   ├── client.ts         ServiceFusionClient — OAuth 2.0 CC, token cache, rate limiter, response cache
 │   │   │   ├── tools/
-│   │   │   │   └── index.ts      23 active tools + 35 deprecated stubs, organized by category
-│   │   │   ├── rate-limiter.ts   Token-bucket rate limiter (60 req/min, reads SF response headers)
+│   │   │   │   └── index.ts      23 active tools + 34 deprecated stubs, organized by category
+│   │   │   ├── rate-limiter.ts   Token-bucket rate limiter (60 req/min initial, response headers override at runtime)
 │   │   │   └── cache.ts          TTL response cache (60s general, 300s lookups, 600s /me)
-│   │   └── scripts/
-│   │       └── api-discovery.sh  API validation/discovery script
 │   └── shared/                   @phoenix/shared — workspace-internal utilities
 │       └── src/
 │           ├── keyvault.ts       Azure Key Vault secret fetcher (DefaultAzureCredential, OIDC)
@@ -48,37 +46,26 @@ current/
 ├── plugin/                       Claude Code plugin (installs to ~/.claude/plugins/)
 │   ├── .claude-plugin/
 │   │   └── plugin.json           Plugin manifest — name: servicefusion, version: 2.0.0
-│   ├── .mcp.json                 Wires servicefusion MCP server via stdio
-│   ├── commands/                 6 slash commands
+│   ├── .mcp.json                 Wires servicefusion MCP server via stdio (path uses ${PHOENIX_PCS_ROOT})
+│   ├── commands/                 4 slash commands
 │   │   ├── sf-briefing.md        Morning operations summary
 │   │   ├── sf-jobs.md            Job listing / creation / status lookup
-│   │   ├── sf-customers.md       Customer search, view, create
-│   │   ├── sf-estimate.md        Guided estimate/proposal creation
-│   │   ├── sf-schedule.md        Calendar tasks, technician availability
-│   │   └── sf-pricebook.md       Pricebook reference + Rexel pricing
+│   │   ├── sf-estimate.md        Guided estimate creation
+│   │   └── sf-schedule.md        Calendar tasks, technician availability
 │   ├── agents/
 │   │   └── sf-operations-agent.md  Autonomous multi-step SF orchestrator
-│   ├── hooks/
-│   │   └── hooks.json            Hook scaffold (minimal — no active hooks yet)
-│   ├── skills/
-│   │   └── servicefusion-operations/
-│   │       ├── SKILL.md          Trigger phrases + operational knowledge
-│   │       └── references/       6 reference docs loaded on demand
-│   │           ├── api-reference.md
-│   │           ├── workflows.md
-│   │           ├── financials.md
-│   │           ├── rexel-integration.md
-│   │           ├── browser-fallback.md
-│   │           └── future-gateway.md
-│   └── PLUGIN_DEVELOPMENT_GUIDE.md  Team reference — how to build Claude Code plugins
-├── docs/
-│   ├── SERVICEFUSION_MCP_REWRITE_BRIEF.md  MCP rewrite spec (compiled 2026-03-05)
-│   └── api-surface.md            Authoritative SF v1 API surface reference
-└── references/
-    ├── servicefusion-api-complete-spec.md  17,929-line processed reference (75 types, 26 endpoints)
-    ├── servicefusion-api-spec.json         Raw 4.3MB RAML specification
-    └── servicefusion-web-scrape.json       Raw web-scraped API data
+│   └── skills/
+│       └── servicefusion-operations/
+│           ├── SKILL.md          Trigger phrases + operational knowledge
+│           └── references/       2 reference docs loaded on demand
+│               ├── api-reference.md
+│               └── browser-fallback.md
+└── docs/
+    ├── api-surface.md            Authoritative SF v1 API surface reference
+    └── decisions/                ADRs (architecture decision records)
 ```
+
+Archived material (oversized API dumps, broken commands, aspirational references) lives at `phoenix-archive/phoenix-current-software/` — see `MANIFEST_2026-05-02.md` in the archive repo.
 
 **MCP Tool Categories (23 active tools):**
 
@@ -122,7 +109,7 @@ current/
 |------|---------|
 | `packages/mcp-server/src/index.ts` | Server factory and entrypoint |
 | `packages/mcp-server/src/client.ts` | SF API client (OAuth, rate limiting, caching) |
-| `packages/mcp-server/src/tools/index.ts` | All 23 active tools + 35 deprecated stubs |
+| `packages/mcp-server/src/tools/index.ts` | All 23 active tools + 34 deprecated stubs |
 | `packages/mcp-server/src/rate-limiter.ts` | Token-bucket rate limiter (60 req/min) |
 | `packages/mcp-server/src/cache.ts` | TTL GET response cache |
 | `packages/mcp-server/package.json` | Package config — `@phoenix/servicefusion-mcp` |
@@ -130,28 +117,25 @@ current/
 | `packages/shared/src/logger.ts` | Structured logger factory |
 | `packages/shared/src/types/index.ts` | Shared TypeScript types (SFPaginatedResponse, etc.) |
 | `plugin/.claude-plugin/plugin.json` | Plugin manifest |
-| `plugin/.mcp.json` | MCP server wiring for Claude Code |
-| `plugin/commands/*.md` | 6 slash command definitions |
+| `plugin/.mcp.json` | MCP server wiring for Claude Code (uses `${PHOENIX_PCS_ROOT}`) |
+| `plugin/commands/*.md` | 4 slash command definitions |
 | `plugin/agents/sf-operations-agent.md` | Autonomous SF operations agent |
 | `plugin/skills/servicefusion-operations/SKILL.md` | Skill — triggers and operational knowledge |
-| `plugin/skills/servicefusion-operations/references/` | 6 on-demand reference docs |
-| `plugin/PLUGIN_DEVELOPMENT_GUIDE.md` | Team reference for building Claude Code plugins |
-| `docs/SERVICEFUSION_MCP_REWRITE_BRIEF.md` | MCP rewrite spec |
+| `plugin/skills/servicefusion-operations/references/` | 2 on-demand reference docs (api-reference, browser-fallback) |
 | `docs/api-surface.md` | Authoritative SF v1 API surface |
-| `references/servicefusion-api-complete-spec.md` | Full 17,929-line processed API reference |
+| `docs/decisions/` | ADRs (architecture decision records) |
+| `RUNBOOK.md` | Run, vault rotation, recovery procedures |
+| `CHANGELOG.md` | Versioned change log |
 
 ## Current State
 
-- **Status:** active
-- **Last Commit:** 2026-03-17 — `Add MCP server, shared package, and Claude Code plugin` (0406c56)
-- **Open PRs:** None at time of audit
-- **Open Branches:** main only (1 branch)
+- **Status:** active — Phase A stabilization landed 2026-05-02
+- **Last stable:** Phase A PR (post-archive sweep, build orchestration, strict TS, CI, tests)
+- **Open PRs:** Phase A PR pending Shane review
 - **Known Issues:**
-  - `plugin/.mcp.json` points to the old `phoenix-ai-core-staging` path — needs updating to point at `current/packages/mcp-server/dist/index.js` after a build
-  - No CI/CD configured — build and typecheck are manual
-  - `dist/` is not committed — must run `npm run build` before installing the plugin
-  - Vitest test suite exists but coverage is unknown
-  - 35 deprecated stubs remain in `tools/index.ts` — endpoints returned 404 during discovery; kept for backward compatibility
+  - 34 deprecated stubs in `tools/index.ts` — proposal pending in `docs/decisions/2026-05-02-drop-deprecated-stubs.md`
+  - SF auth currently uses fallback secret names alongside the canonical `SERVICEFUSION-CLIENT-ID` / `SERVICEFUSION-SECRET`. Vault cleanup is a follow-up.
+  - `dist/` is not committed — `npm run build` required before installing the plugin
 
 ## Branding & UI
 

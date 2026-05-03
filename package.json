@@ -1,0 +1,23 @@
+{
+  "name": "phoenix-current-software",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phoenix Current Software (PCS) — Service Fusion v1 API integration. Monorepo with shared utilities + MCP server + Claude Code plugin.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @phoenix/shared && npm run build -w @phoenix/servicefusion-mcp",
+    "typecheck": "npm run typecheck -w @phoenix/shared && npm run typecheck -w @phoenix/servicefusion-mcp",
+    "test": "npm test -w @phoenix/servicefusion-mcp",
+    "clean": "rm -rf packages/shared/dist packages/mcp-server/dist"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Phoenix Electric LLC",
+    "email": "shane@phoenixelectric.life"
+  }
+}

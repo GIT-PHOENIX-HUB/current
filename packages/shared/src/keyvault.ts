@@ -1,5 +1,8 @@
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('keyvault');
 
 // =============================================================================
 // Types
@@ -97,15 +100,35 @@ export async function getServiceFusionSecrets(): Promise<ServiceFusionSecrets> {
     return secrets;
   }
 
-  // Helper to try a list of secret names in order, then fallback to env
-  const firstSecret = async (names: string[], envFallback: string): Promise<string> => {
-    for (const name of names) {
+  // First non-empty secret from a name list, env fallback, with warn-on-fallback.
+  // The first entry of `names` is the canonical name; later entries are tolerated legacy aliases.
+  const firstSecret = async (
+    label: string,
+    names: string[],
+    envFallback: string,
+  ): Promise<string> => {
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i]!;
       try {
         const value = await fetchSecret(name);
-        if (value) return value.trim();
+        if (value) {
+          if (i > 0) {
+            logger.warn(
+              { label, canonical: names[0], fallbackHit: name },
+              'Vault secret resolved via legacy alias — clean up the vault to remove it',
+            );
+          }
+          return value.trim();
+        }
       } catch {
-        // continue to next name
+        // continue
       }
+    }
+    if (envFallback) {
+      logger.warn(
+        { label, canonical: names[0] },
+        'Vault lookup failed for all known names — falling back to environment variable',
+      );
     }
     return envFallback || '';
   };
@@ -136,8 +159,8 @@ export async function getServiceFusionSecrets(): Promise<ServiceFusionSecrets> {
         };
 
   const [clientId, clientSecret] = await Promise.all([
-    firstSecret(nameSets.clientId, envClientId || ''),
-    firstSecret(nameSets.clientSecret, envClientSecret || ''),
+    firstSecret('serviceFusion.clientId', nameSets.clientId, envClientId || ''),
+    firstSecret('serviceFusion.clientSecret', nameSets.clientSecret, envClientSecret || ''),
   ]);
 
   const secrets: ServiceFusionSecrets = {
@@ -152,6 +175,30 @@ export async function getServiceFusionSecrets(): Promise<ServiceFusionSecrets> {
 // =============================================================================
 // Graph Secrets
 // =============================================================================
+
+/**
+ * Resolve the Azure tenant ID. Required for Graph and SharePoint integrations.
+ * Order: AZURE_TENANT_ID env var → fetch `Azure-TenantId` from vault.
+ * Throws if neither is set.
+ */
+async function resolveTenantId(): Promise<string> {
+  const fromEnv = process.env.AZURE_TENANT_ID;
+  if (fromEnv) return fromEnv.trim();
+
+  const vaultUrl = process.env.AZURE_KEY_VAULT_URI;
+  if (vaultUrl) {
+    try {
+      const fromVault = await fetchSecret('Azure-TenantId');
+      if (fromVault) return fromVault.trim();
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error(
+    'Azure tenant ID not configured. Set AZURE_TENANT_ID environment variable or add `Azure-TenantId` secret to the vault.',
+  );
+}
 
 export async function getGraphSecrets(): Promise<GraphSecrets> {
   if (cachedSecrets.graph) {
@@ -173,15 +220,16 @@ export async function getGraphSecrets(): Promise<GraphSecrets> {
   }
 
   // Prefer dedicated Graph secrets; fallback to PhoenixAiCommand app secret when present.
-  const [clientId, clientSecret] = await Promise.all([
+  const [clientId, clientSecret, tenantId] = await Promise.all([
     fetchSecret('Graph-ClientId').catch(async () => envClientId || fetchSecret('PhoenixAiCommandClientId')),
     fetchSecret('Graph-ClientSecret').catch(() => fetchSecret('PhoenixAiCommandSecret')),
+    resolveTenantId(),
   ]);
 
   const secrets: GraphSecrets = {
     clientId,
     clientSecret,
-    tenantId: process.env.AZURE_TENANT_ID || 'e7d8daef-fd5b-4e0b-bf8f-32f090c7c4d5',
+    tenantId,
   };
 
   cachedSecrets.graph = secrets;
@@ -200,10 +248,16 @@ export async function getSharePointDirectorSecrets(): Promise<SharePointDirector
   const vaultUrl = process.env.AZURE_KEY_VAULT_URI;
 
   if (!vaultUrl) {
+    const tenantId = process.env.SHAREPOINT_DIRECTOR_TENANT_ID || process.env.AZURE_TENANT_ID;
+    if (!tenantId) {
+      throw new Error(
+        'SharePoint Director tenant ID not configured. Set SHAREPOINT_DIRECTOR_TENANT_ID or AZURE_TENANT_ID, or add the secret to the vault.',
+      );
+    }
     const secrets: SharePointDirectorSecrets = {
       clientId: process.env.SHAREPOINT_DIRECTOR_CLIENT_ID || '',
       clientSecret: process.env.SHAREPOINT_DIRECTOR_CLIENT_SECRET || '',
-      tenantId: process.env.SHAREPOINT_DIRECTOR_TENANT_ID || 'e7d8daef-fd5b-4e0b-bf8f-32f090c7c4d5',
+      tenantId,
     };
 
     cachedSecrets.sharePointDirector = secrets;
@@ -213,7 +267,7 @@ export async function getSharePointDirectorSecrets(): Promise<SharePointDirector
   const [clientId, clientSecret, tenantId] = await Promise.all([
     fetchSecret('SharePoint-Director-ClientId'),
     fetchSecret('SharePoint-Director-ClientSecret'),
-    fetchSecret('SharePoint-Director-TenantId').catch(() => 'e7d8daef-fd5b-4e0b-bf8f-32f090c7c4d5'),
+    fetchSecret('SharePoint-Director-TenantId').catch(() => resolveTenantId()),
   ]);
 
   const secrets: SharePointDirectorSecrets = {

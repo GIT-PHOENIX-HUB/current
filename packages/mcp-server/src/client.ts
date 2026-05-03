@@ -1,8 +1,9 @@
-import { getServiceFusionSecrets, createLogger, type ServiceFusionSecrets } from '@phoenix/shared';
+import { getServiceFusionSecrets, createLogger, logApproval, type ServiceFusionSecrets } from '@phoenix/shared';
 import { RateLimiter } from './rate-limiter.js';
 import { ResponseCache } from './cache.js';
 
 const logger = createLogger('servicefusion-client');
+const approvalLogger = createLogger('servicefusion-approval');
 
 // =============================================================================
 // Types
@@ -153,19 +154,52 @@ export class ServiceFusionClient {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     if (!this.initialized) await this.initialize();
 
-    const token = await this.getToken();
     const { params, skipCache, ...fetchOptions } = options;
     const method = (fetchOptions.method || 'GET').toUpperCase();
+    const isWrite = (options.requiresApproval ?? method !== 'GET');
 
-    // Enforce approval on writes
-    const shouldRequireApproval = options.requiresApproval ?? method !== 'GET';
-    if (shouldRequireApproval) {
+    // Enforce approval on writes — and emit a structured approval log line for every write.
+    // Modes: dry_run (SF_DRY_RUN=true) returns payload without calling SF.
+    //        commit (approval token present OR ALLOW_SF_WRITES=true) calls SF normally.
+    if (isWrite) {
       const approvalToken = options.approvalToken || process.env.SF_APPROVAL_TOKEN;
       const allowWithoutApproval = process.env.ALLOW_SF_WRITES === 'true';
-      if (!allowWithoutApproval && !approvalToken) {
-        throw new Error('Service Fusion write blocked: approval token required (set SF_APPROVAL_TOKEN or ALLOW_SF_WRITES=true to bypass)');
+      const dryRun = process.env.SF_DRY_RUN === 'true';
+
+      if (!dryRun && !allowWithoutApproval && !approvalToken) {
+        throw new Error('Service Fusion write blocked: approval token required (set SF_APPROVAL_TOKEN or ALLOW_SF_WRITES=true, or SF_DRY_RUN=true)');
+      }
+
+      const tokenSource = approvalToken
+        ? (options.approvalToken ? 'argument' : 'env')
+        : (allowWithoutApproval ? 'allow_writes_env' : 'none');
+
+      let parsedBody: unknown = undefined;
+      if (typeof fetchOptions.body === 'string') {
+        try { parsedBody = JSON.parse(fetchOptions.body); } catch { parsedBody = fetchOptions.body; }
+      }
+
+      logApproval(approvalLogger, `sf.${method.toLowerCase()} ${path}`, tokenSource, {
+        mode: dryRun ? 'dry_run' : 'commit',
+        method,
+        path,
+        params,
+        body: parsedBody,
+      });
+
+      if (dryRun) {
+        // Don't call SF. Return a structured envelope so the tool can surface it to the user.
+        return {
+          dryRun: true,
+          method,
+          path,
+          params,
+          body: parsedBody,
+        } as T;
       }
     }
+
+    const token = await this.getToken();
 
     // Check cache for GET requests
     if (method === 'GET' && !skipCache) {
